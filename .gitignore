@@ -1,0 +1,5 @@
+node_modules/
+dist/
+mush.config.json
+*.config.json
+.env
