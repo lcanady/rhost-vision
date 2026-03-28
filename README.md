@@ -160,7 +160,7 @@ Pass connection details directly without a config file — useful for CI scripts
 npx @rhost/vision --host localhost --port 4201 --user Wizard --pass secret "+jobs/help"
 ```
 
-`--port` defaults to `4201`. `--user` and `--pass` fall back to `MUSH_USER` / `MUSH_PASS` env vars, then to `Wizard` / `Nyctasia`.
+`--port` defaults to `4201`. `--user` falls back to `MUSH_USER` then `Wizard`. `--pass` falls back to `MUSH_PASS` — **if neither is supplied the tool exits with an error** rather than silently using a default password.
 
 ### Installing Softcode Before Running
 
@@ -267,7 +267,7 @@ When running interactively (no command argument), these special commands are ava
 |----------|---------|-------------|
 | `MUSH_IMAGE` | `rhostmush:latest` | Docker image to use |
 | `MUSH_USER` | `Wizard` | Login username (Docker and inline modes) |
-| `MUSH_PASS` | `Nyctasia` | Login password (Docker and inline modes) |
+| `MUSH_PASS` | `Nyctasia` *(Docker only)* | Login password. **Required** for inline mode — if absent, the tool exits with an error. Docker mode keeps `Nyctasia` as the well-known container default. |
 
 Config mode credentials always come from the config file.
 
@@ -435,6 +435,17 @@ Use `MUSH_PASS` (environment variable) instead of `--pass` on shared or multi-us
 Error: File not found: secrets.mush      ✓ (no path disclosed)
 Error: ENOENT: /home/user/secrets.mush   ✗ (would leak path)
 ```
+
+### Explicit Credentials Required for Inline Mode
+
+When `--host` is used, a password must be supplied via `--pass` or `MUSH_PASS`. The tool **never silently falls back to a default password** for an existing server — doing so would silently authenticate against any server still running the well-known RhostMUSH default. If neither source provides a password, the tool exits immediately with a clear error:
+
+```
+Inline connection requires a password.
+Supply --pass <password> or set the MUSH_PASS environment variable.
+```
+
+Docker mode is exempt: the container is ephemeral and its credentials are the well-known defaults by design.
 
 ### Config Validation
 

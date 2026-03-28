@@ -111,6 +111,40 @@ export function validateConfig(raw: unknown): MushConfig {
 }
 
 /**
+ * Safely extracts the history string array from a readline Interface object.
+ *
+ * readline.Interface exposes `.history` as an undocumented internal property.
+ * Its existence and type are not guaranteed across Node versions, so this
+ * helper guards with Array.isArray rather than relying on the type cast alone.
+ *
+ * Returns an empty array if the property is absent, null, or not an array.
+ */
+export function extractHistoryLines(rl: unknown): string[] {
+  const h = (rl as Record<string, unknown>)["history"];
+  return Array.isArray(h) ? (h as string[]) : [];
+}
+
+/**
+ * Validates that explicit credentials are present for an inline connection
+ * (--host mode).  Throws if the password is absent or empty so the caller
+ * never silently falls through to a well-known default like "Nyctasia".
+ *
+ * The username is allowed to default to "Wizard" (it is not a secret), but
+ * the password MUST be supplied explicitly via --pass or MUSH_PASS.
+ */
+export function validateInlineCreds(
+  user: string | undefined,
+  pass: string | undefined
+): void {
+  if (!pass) {
+    throw new Error(
+      "Inline connection requires a password. " +
+        "Supply --pass <password> or set the MUSH_PASS environment variable."
+    );
+  }
+}
+
+/**
  * Returns a safe error message that strips full filesystem paths from
  * ENOENT errors, preventing path disclosure in REPL output.
  */

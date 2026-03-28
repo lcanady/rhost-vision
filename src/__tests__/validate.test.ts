@@ -6,6 +6,8 @@ import {
   validateWritePath,
   redactPassArg,
   safeErrorMessage,
+  validateInlineCreds,
+  extractHistoryLines,
 } from "../validate.js";
 
 // ---------------------------------------------------------------------------
@@ -236,6 +238,36 @@ describe("validateWritePath — M2/M3 arbitrary file write", () => {
 });
 
 // ---------------------------------------------------------------------------
+// M-1 — Hardcoded default password in inline connection mode
+// ---------------------------------------------------------------------------
+
+describe("validateInlineCreds — M-1 silent default password", () => {
+  it("EXPLOIT: without guard, omitting --pass silently resolves to 'Nyctasia'", () => {
+    // This documents the pre-fix behaviour: the ?? chain hides the fallback.
+    const inlinePass: string | undefined = undefined;
+    const envPass: string | undefined = undefined;
+    const resolved = inlinePass ?? envPass ?? "Nyctasia";
+    expect(resolved).toBe("Nyctasia"); // proves the bug exists without the guard
+  });
+
+  it("throws when --pass and MUSH_PASS are both absent (inline mode)", () => {
+    expect(() => validateInlineCreds("Wizard", undefined)).toThrow(/--pass/);
+  });
+
+  it("accepts an explicit --pass value", () => {
+    expect(() => validateInlineCreds("Wizard", "mySecret")).not.toThrow();
+  });
+
+  it("accepts a password supplied via the env-var path (non-empty string)", () => {
+    expect(() => validateInlineCreds("Wizard", "envSecret")).not.toThrow();
+  });
+
+  it("throws when the resolved password is an empty string", () => {
+    expect(() => validateInlineCreds("Wizard", "")).toThrow(/--pass/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // L1 — Credential exposure: --pass in process.argv
 // ---------------------------------------------------------------------------
 
@@ -263,5 +295,45 @@ describe("redactPassArg — L1 password in process list", () => {
     const argv = ["node", "cli.js", "--pass"];
     expect(() => redactPassArg(argv)).not.toThrow();
     expect(argv).toEqual(["node", "cli.js", "--pass"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L-1 — Unsafe readline.history internal cast
+// ---------------------------------------------------------------------------
+
+describe("extractHistoryLines — L-1 readline internal property safety", () => {
+  it("EXPLOIT: casting an object with no history property gives undefined, spread would throw", () => {
+    // This demonstrates the pre-fix risk: if `history` is undefined at runtime,
+    // `[...undefined]` throws a TypeError.
+    const fakeRl = {} as unknown as { history: string[] };
+    const lines = fakeRl.history; // undefined
+    expect(() => [...(lines as unknown as string[])]).toThrow();
+  });
+
+  it("returns an empty array when the rl object has no history property", () => {
+    expect(extractHistoryLines({})).toEqual([]);
+  });
+
+  it("returns an empty array when history is undefined", () => {
+    expect(extractHistoryLines({ history: undefined })).toEqual([]);
+  });
+
+  it("returns an empty array when history is null", () => {
+    expect(extractHistoryLines({ history: null })).toEqual([]);
+  });
+
+  it("returns an empty array when history is a non-array truthy value", () => {
+    expect(extractHistoryLines({ history: "oops" })).toEqual([]);
+    expect(extractHistoryLines({ history: 42 })).toEqual([]);
+  });
+
+  it("returns the history array when it is a valid string[]", () => {
+    const lines = ["look here", "score", "+jobs/view 1"];
+    expect(extractHistoryLines({ history: lines })).toEqual(lines);
+  });
+
+  it("returns an empty array when history is an empty array", () => {
+    expect(extractHistoryLines({ history: [] })).toEqual([]);
   });
 });

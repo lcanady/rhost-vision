@@ -52,6 +52,8 @@ import {
   validateConfigPath,
   validateWritePath,
   validateConfig,
+  validateInlineCreds,
+  extractHistoryLines,
   redactPassArg,
   safeErrorMessage,
 } from "./validate";
@@ -429,9 +431,11 @@ async function runRepl(client: RhostClient): Promise<void> {
 
   return new Promise((res) => {
     rl.on("close", () => {
-      // Persist history (newest-first in memory → oldest-first on disk)
-      const lines = (rl as unknown as { history: string[] }).history;
-      if (lines?.length) {
+      // Persist history (newest-first in memory → oldest-first on disk).
+      // extractHistoryLines guards against the undocumented internal property
+      // being absent or non-array in future Node versions.
+      const lines = extractHistoryLines(rl);
+      if (lines.length > 0) {
         try {
           writeFileSync(
             HISTORY_FILE,
@@ -493,10 +497,11 @@ async function boot(): Promise<{
   if (inlineHost) {
     const port = inlinePort ?? 4201;
     const user = inlineUser ?? process.env.MUSH_USER ?? "Wizard";
-    const pass = inlinePass ?? process.env.MUSH_PASS ?? "Nyctasia";
+    const pass = inlinePass ?? process.env.MUSH_PASS;
+    validateInlineCreds(user, pass);
     const client = getClient(inlineHost, port);
     await client.connect();
-    await client.login(user, pass);
+    await client.login(user, pass!);
     return { client, teardown: () => client.disconnect() };
   }
 
@@ -532,6 +537,13 @@ async function boot(): Promise<{
   const { client, teardown } = await boot();
 
   try {
+    // Drain post-login server output (room look, connect messages, etc.) that
+    // accumulated in the receive buffer between login() completing and our first
+    // real command.  Without this, the buffered lines appear as output of the
+    // first command sent — making it look like the REPL's first response is delayed.
+    const loginOutput = await client.command("");
+    if (loginOutput.length) log(loginOutput.join("\n"));
+
     for (const file of softcodeFiles) {
       await installFile(client, file);
     }
