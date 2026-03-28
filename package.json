@@ -1,6 +1,6 @@
 {
   "name": "@rhost/vision",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Run a command against a RhostMUSH server (Docker or existing)",
   "bin": {
     "mush-vision": "bin/mush-run.js"
